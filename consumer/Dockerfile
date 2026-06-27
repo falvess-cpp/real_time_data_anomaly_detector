@@ -1,45 +1,46 @@
-# ==========================================
-# Stage 1: Dynamic Build & Compilation Engine
-# ==========================================
+# =========================================================
+# Estágio 1: Builder - Clona do GitHub e compila em Release
+# =========================================================
 FROM debian:12-slim AS builder
 
-# Install essential compilation toolchains and library requirements
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
     git \
     libhiredis-dev \
     pkg-config \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy the local source files into the builder layer context
-COPY . .
+# Argumentos de build apontando para o seu repositório oficial
+ARG REPO_URL="https://github.com/falvess-cpp/real_time_data_anomaly_detector.git"
+ARG REPO_VERSION="main"
 
-# Compile optimized Release targets utilizing all hardware processing cores
-WORKDIR /app/build
+# Clona o ecossistema completo do repositório remoto
+RUN git clone --depth 1 --branch ${REPO_VERSION} ${REPO_URL} .
+
+# Navega até o subdiretório do Consumer para realizar a compilação
+WORKDIR /app/consumer/build
 RUN cmake -DCMAKE_BUILD_TYPE=Release .. && \
     make -j$(nproc)
 
-# ==========================================
-# Stage 2: Hardened Runtime Environment
-# ==========================================
+# =========================================================
+# Estágio 2: Runtime - Imagem limpa e otimizada para execução
+# =========================================================
 FROM debian:12-slim
 
-# Install only the core runtime shared library package for hiredis
 RUN apt-get update && apt-get install -y \
     libhiredis1.1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
 
-# Extract only the isolated static binary from the compilation context stage
-COPY --from=builder /app/build/consumer_app .
+# Extrai o binário final do Consumer limpo de dependências de build
+COPY --from=builder /app/consumer/build/consumer_app .
 
-# Define fallback infrastructure binding environments
 ENV REDIS_HOST=127.0.0.1
 ENV REDIS_PORT=6380
 
-# Execute entry points directly on stack
 CMD ["./consumer_app"]

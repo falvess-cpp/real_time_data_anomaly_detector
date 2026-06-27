@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # --- Centralized Messaging Backbone ---
+  messaging_system:
+    image: redis:7-alpine
+    container_name: c_redis_messaging
+    command: redis-server --port 6380
+    ports:
+      - "6380:6380"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "6380", "ping"]
+      interval: 3s
+      timeout: 1s
+      retries: 5
+
+  # --- Data Generator (Producer) ---
+  producer_service:
+    build:
+      context: ./producer
+      dockerfile: Dockerfile
+      args:
+        - REPO_URL=https://github.com/falvess-cpp/real_time_data_anomaly_detector.git
+        - REPO_VERSION=main
+    container_name: c_realtime_producer
+    restart: on-failure
+    environment:
+      - REDIS_HOST=messaging_system
+      - REDIS_PORT=6380
+    depends_on:
+      messaging_system:
+        condition: service_healthy
+
+  # --- Anomaly Detector (Consumer) ---
+  consumer_service:
+    build:
+      context: ./consumer
+      dockerfile: Dockerfile
+      args:
+        - REPO_URL=https://github.com/falvess-cpp/real_time_data_anomaly_detector.git
+        - REPO_VERSION=main
+    container_name: c_realtime_consumer
+    restart: on-failure
+    environment:
+      - REDIS_HOST=messaging_system
+      - REDIS_PORT=6380
+    depends_on:
+      messaging_system:
+        condition: service_healthy

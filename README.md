@@ -51,21 +51,24 @@ The system is split into two specialized components coordinating over a lightwei
         +------------+ +------------+ +------------+
 
 Core Engineering Design Choices:
+
 * Bounded Zero-Allocation Memory Layer (ObjectPool): 
-	Eliminates constant calls to the global OS heap allocator (new/delete) during continuous streaming. Objects are pre-allocated at boot and recycled. To handle high-traffic bursts without introducing latency jitter, the pool features a deterministic capacity cap, safely deallocating transient surplus objects outside critical execution paths.
+Eliminates constant calls to the global OS heap allocator (new/delete) during continuous streaming. Objects are pre-allocated at boot and recycled. To handle high-traffic bursts without introducing latency jitter, the pool features a deterministic capacity cap, safely deallocating transient surplus objects outside critical execution paths.
+
 * Thread-Confined State Routing (Dispatcher): 
-	Computes a deterministic modular hash on the incoming respondent_id (Sticky Routing). This forces all metrics belonging to a specific tenant into the exact same background worker queue, ensuring absolute chronological processing and allowing the worker's internal registries to run 100% lock-free.
+Computes a deterministic modular hash on the incoming respondent_id (Sticky Routing). This forces all metrics belonging to a specific tenant into the exact same background worker queue, ensuring absolute chronological processing and allowing the worker's internal registries to run 100% lock-free.
+
 * Un-poisoned Baseline (RollingWindow): 
-	Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) before updating the window. This protects against floating-point drift and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
+Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) before updating the window. This protects against floating-point drift and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
 
 ---
 
 ## 🚀 Getting Started
 
-### Prerequisites
-* Docker and Docker Compose installed on your host system.
+Prerequisites:
+Docker and Docker Compose installed on your host system.
 
-### Running the Complete Ecosystem
+Running the Complete Ecosystem
 From the absolute root directory of the project, execute the following commands:
 
 ```bash

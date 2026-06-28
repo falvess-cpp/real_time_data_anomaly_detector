@@ -49,6 +49,7 @@ The system is split into two specialized components coordinating over a lightwei
         |  Rolling   | |  Rolling   | |  Rolling   |     (Isolated memory windows per tenant,
         |  Windows   | |  Windows   | |  Windows   |      running 100% LOCK-FREE)
         +------------+ +------------+ +------------+
+```
 
 Core Engineering Design Choices:
 
@@ -60,8 +61,6 @@ Computes a deterministic modular hash on the incoming respondent_id (Sticky Rout
 
 * Un-poisoned Baseline (RollingWindow): 
 Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) before updating the window. This protects against floating-point drift and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
-
----
 
 ## 🚀 Getting Started
 
@@ -144,6 +143,7 @@ The Mitigation: Bind custom UNIX signal handlers (SIGINT/SIGTERM) in main.cpp. U
 
 ## 🛠️ Project Structure
 
+```text
 real_time_data_anomaly_detector/
 ├── docker-compose.yml       # Infrastructure orchestration
 ├── README.md                # System documentation
@@ -170,5 +170,4 @@ real_time_data_anomaly_detector/
         ├── dispatcher.cpp   # Sticky routing implementation
         ├── worker.cpp       # Thread loops & Sliding Z-Score calculations
         └── main.cpp         # App bootstrapper & Redis Pub/Sub subscriber
-		
-		
+```	

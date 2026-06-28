@@ -64,11 +64,14 @@ Evaluates incoming signals against the sliding historical queue ($N = 50$ to $10
 
 ## 🚀 Getting Started
 
-Prerequisites:
-Docker and Docker Compose installed on your host system.
+### Prerequisites
+* **For Containerized Execution:** Docker and Docker Compose installed.
+* **For Local Native Compilation:** CMake (>= 3.15), a C++20 compliant compiler (GCC >= 10 or Clang >= 11), and local development libraries for `redis++` and `nlohmann/json`.
 
-Running the Complete Ecosystem
-From the absolute root directory of the project, execute the following commands:
+---
+
+### Method 1: Running with Docker Compose (Recommended)
+From the absolute root directory of the project, execute the following commands to orchestrate the entire eco-system:
 
 ```bash
 # 1. Build the multi-stage optimized C++ images
@@ -80,15 +83,50 @@ docker-compose up -d
 # 3. Stream the Consumer logs to monitor real-time anomaly flagging
 docker logs -f c_realtime_consumer
 ```
+### Method 2: Building and Running Locally (Native Compilation)
+If you prefer to compile and execute the binaries directly on your host machine (outside Docker), follow these steps.
 
-Expected Output Log Output
+Note: Ensure your Redis server is up and running on port 6380 beforehand.
+
+1. Compile and Run the Producer Service:
+
+```bash
+cd ../../producer
+mkdir build && cd build
+cmake ..
+make
+./producer_app
+```
+
+2. Compile and Run the Consumer Service:
+
+```bash
+cd consumer
+mkdir build && cd build
+cmake ..
+make
+./consumer_app
+```
+
+3. Monitoring the Live Redis Telemetry Stream
+
+```bash
+# If running via Docker Compose:
+docker exec -it c_redis_messaging redis-cli -p 6380 MONITOR
+
+# If running against a local host Redis server:
+redis-cli -p 6380 MONITOR
+```
+
+### Expected Output Log Output
 When monitoring the consumer logs, you will observe the pipeline actively partitioning multi-tenant workloads across separate internal OS threads:
 
-[Thread: 14023948293] [1719597100] Data point: 49.20 | Status: NORMAL   | Z-score: 0.15 | [ID: resp_12]
-[Thread: 14023948293] [1719597101] Data point: 52.10 | Status: NORMAL   | Z-score: 0.42 | [ID: resp_12]
-[Thread: 14023948500] [1719597102] Data point: 142.50 | Status: ANOMALY DETECTED! | Z-score: 18.40 | ALERT: Significant deviation detected. [ID: resp_45]
+[Thread: 127236206339776][1782687150] Data point: 51.69 | Status: OK | Z-score: 0.19 | [ID: resp_100]
+[Thread: 127236164376256][1782687150] Data point: 55.10 | Status: OK | Z-score: 0.21 | [ID: resp_63]
+[Thread: 127236223125184][1782687150] Data point: 115.31 | Status: ANOMALY DETECTED! | Z-score: 4.70 | ALERT: Significant deviation detected. [ID: resp_61]
+[Thread: 127236164376256][1782687152] Data point: 52.91 | Status: OK | Z-score: 0.18 | [ID: resp_90]
 
-## 🔮 Up Next & Production Roadmaps
+## 🔮 Up Next
 
 ### 1. Code Maintenance & Tooling Ecosystem
 

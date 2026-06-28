@@ -122,11 +122,12 @@ redis-cli -p 6380 MONITOR
 
 ### Expected Output Log Output
 When monitoring the consumer logs, you will observe the pipeline actively partitioning multi-tenant workloads across separate internal OS threads:
-
+```bash
 [Thread: 127236206339776][1782687150] Data point: 51.69 | Status: OK | Z-score: 0.19 | [ID: resp_100]
 [Thread: 127236164376256][1782687150] Data point: 55.10 | Status: OK | Z-score: 0.21 | [ID: resp_63]
 [Thread: 127236223125184][1782687150] Data point: 115.31 | Status: ANOMALY DETECTED! | Z-score: 4.70 | ALERT: Significant deviation detected. [ID: resp_61]
 [Thread: 127236164376256][1782687152] Data point: 52.91 | Status: OK | Z-score: 0.18 | [ID: resp_90]
+```
 ---
 
 ## 🔮 Up Next

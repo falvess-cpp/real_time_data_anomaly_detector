@@ -14,17 +14,18 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Argumentos de build apontando para o seu repositório oficial
 ARG REPO_URL="https://github.com/falvess-cpp/real_time_data_anomaly_detector.git"
-ARG REPO_VERSION="main"
+ARG REPO_VERSION="master"
 
-# Clona o ecossistema completo do repositório remoto
 RUN git clone --depth 1 --branch ${REPO_VERSION} ${REPO_URL} .
 
-# Navega até o subdiretório do Consumer para realizar a compilação
 WORKDIR /app/consumer/build
+# Compila e centraliza os artefatos (.so e binário) em uma pasta /app/dist
 RUN cmake -DCMAKE_BUILD_TYPE=Release .. && \
-    make -j$(nproc)
+    make -j$(nproc) && \
+    mkdir -p /app/dist && \
+    cp consumer_app /app/dist/ && \
+    find . -name "libredis++.so*" -exec cp -d {} /app/dist/ \;
 
 # =========================================================
 # Estágio 2: Runtime - Imagem limpa e otimizada para execução
@@ -32,13 +33,17 @@ RUN cmake -DCMAKE_BUILD_TYPE=Release .. && \
 FROM debian:12-slim
 
 RUN apt-get update && apt-get install -y \
-    libhiredis1.1 \
+    libhiredis0.14 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /root/
 
-# Extrai o binário final do Consumer limpo de dependências de build
-COPY --from=builder /app/consumer/build/consumer_app .
+# Copia o binário executável
+COPY --from=builder /app/dist/consumer_app .
+
+# Copia as bibliotecas dinâmicas do redis++ e atualiza o cache do linker do SO
+COPY --from=builder /app/dist/libredis++.so* /usr/local/lib/
+RUN ldconfig
 
 ENV REDIS_HOST=127.0.0.1
 ENV REDIS_PORT=6380

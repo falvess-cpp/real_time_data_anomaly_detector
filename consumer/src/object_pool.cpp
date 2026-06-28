@@ -36,11 +36,16 @@ DataPoint* ObjectPool::acquire() {
 
 void ObjectPool::release(DataPoint* point) {
     if (!point) return;
-    
-    point->respondent_id.clear();
-    point->metric_value = 0.0;
-    point->timestamp = 0;
-
-    std::lock_guard<std::mutex> lock(pool_mutex);
-    pool.push_back(point);
+	
+	// restore default data
+	point->respondent_id.clear();
+	point->metric_value = 0.0;
+	point->timestamp = 0;
+		
+	std::lock_guard<std::mutex> lock(pool_mutex);
+	if (pool.size() >= capacity) {
+		delete point;
+	} else {    
+		pool.push_back(point);
+	}
 }

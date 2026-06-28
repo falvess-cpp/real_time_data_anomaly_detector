@@ -14,9 +14,9 @@
 // Global log synchronization primitive to avoid multi-thread console log corruption
 static std::mutex g_log_mutex;
 
-RollingWindow::RollingWindow(size_t param_min, size_t param_max) 
-: min_size(std::min(param_min, param_max)), 
-  max_size(std::max(param_min, param_max))
+RollingWindow::RollingWindow(size_t window_size) 
+: min_size(window_size), 
+  max_size(window_size * 2)
 {
 
 }
@@ -54,7 +54,7 @@ double RollingWindow::compute_z_score(double new_value, bool& can_evaluate) {
         }
     }	
 
-    // slide the window to include the new point for the NEXT incoming tick
+    // slide the window to include the new point for the next incoming tick
     if (window.size() >= max_size) {
         window.pop_front();
     }
@@ -63,11 +63,10 @@ double RollingWindow::compute_z_score(double new_value, bool& can_evaluate) {
 	return z_score;
 }
 
-//  Optimized Worker Constructor
-Worker::Worker(ObjectPool& pool, size_t min_window_size, size_t max_window_size) 
+Worker::Worker(ObjectPool& pool, size_t window_size) 
     : memory_pool(pool), 
-      min_window_size(min_window_size), 
-      max_window_size(max_window_size),
+      min_window_size(window_size), 
+      max_window_size(window_size * 2),
       thread_handle([this](std::stop_token st) { this->process_loop(st); })
 {
 
@@ -106,34 +105,34 @@ void Worker::process_loop(std::stop_token st) {
 void Worker::execute_logic(DataPoint* point) {
     // If the mapping entry does not exist, instantiate a new RollingWindow instance
     if (local_windows.find(point->respondent_id) == local_windows.end()) {
-        local_windows.emplace(point->respondent_id, RollingWindow(min_window_size, max_window_size));
+        local_windows.emplace(point->respondent_id, RollingWindow(min_window_size));
     }
     
     bool can_evaluate = false;
     double z_score = local_windows[point->respondent_id].compute_z_score(point->metric_value, can_evaluate);
     
-    // Skip console printouts until window boundaries collect sufficient sample baselines
     if (!can_evaluate) {
-        memory_pool.release(point); // Return memory to pool before skipping
+        memory_pool.release(point);
         return;
     }
     
     // Lock logging frame to force clean, synchronous console outputs
     std::lock_guard<std::mutex> log_lock(g_log_mutex);
     std::cout << std::fixed << std::setprecision(2);
+	
+	auto thread_id = std::this_thread::get_id();
     
     if (z_score > 3.0) {
-        // Enforce exact alert string templates requested within specific assignment guidelines [cite: 24, 25]
-        std::cout << "[" << point->timestamp << "] Data point: " << point->metric_value 
+        // Anomaly detected alert log
+        std::cout << "[Thread: " << thread_id << "]" "[" << point->timestamp << "] Data point: " << point->metric_value 
                   << " | Status: ANOMALY DETECTED! | Z-score: " << z_score 
                   << " | ALERT: Significant deviation detected. [ID: " << point->respondent_id << "]\n";
     } else {
-        // Enforce exact standard log string templates requested within specific assignment guidelines [cite: 24]
-        std::cout << "[" << point->timestamp << "] Data point: " << point->metric_value 
+        // Normal status info log
+        std::cout << "[Thread: " << thread_id << "]" "[" << point->timestamp << "] Data point: " << point->metric_value 
                   << " | Status: OK | Z-score: " << z_score 
                   << " | [ID: " << point->respondent_id << "]\n";
     }
 
-    // Safely return processed transaction structure memory back to recycling layer
     memory_pool.release(point);
 }

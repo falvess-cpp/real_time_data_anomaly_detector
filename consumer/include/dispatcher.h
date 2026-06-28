@@ -31,7 +31,7 @@ public:
      * @param num_workers Operational thread lane boundaries.
      * @param window_size Data analysis sliding window limits configuration.
      */
-    Dispatcher(ObjectPool& pool, size_t num_workers, size_t min_window_size, size_t max_window_size);
+    Dispatcher(ObjectPool& pool, size_t num_workers, size_t window_size);
     
     ~Dispatcher() = default;
 

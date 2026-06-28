@@ -19,7 +19,7 @@
  * @return int 0 on graceful execution completion hooks, 1 on critical context termination failures.
  */
 int main() {
-    // Resolve environment targets from system bindings with default engine test configuration fallbacks
+
     const char* env_host = std::getenv("REDIS_HOST");
     const char* env_port = std::getenv("REDIS_PORT");
     
@@ -27,7 +27,6 @@ int main() {
     std::string port = env_port ? env_port : "6380";
 
     try {
-        // Construct and execute the processing engine instance
         Producer producer(host, port);
         producer.run();
     } 

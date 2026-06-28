@@ -1,9 +1,11 @@
 /**
  * @file producer.hpp
- * @brief Class declaration for the telemetry stream simulation Producer using modern C++.
+ * @brief Class declaration for the real-time telemetry stream Producer.
  *
- * Defines the interface, random engine states, and statistical distribution parameters
- * using modern In-Class Member Initializers to decouple statistical specifications.
+ * Defines the interface and architectural boundaries for the data ingestion engine.
+ * This component acts as an autonomous source responsible for simulating concurrent
+ * multi-tenant workloads, encapsulating the rules for steady-state traffic, and
+ * managing controlled outlier injections before data transmission.
  *
  * @author Fabiano Souza
  * @date 2026
@@ -28,12 +30,15 @@ private:
     std::string host; ///< Redis instance host address destination.
     std::string port; ///< Redis instance target network port.
 
-    // --- Modern C++ In-Class Member Initializers ---
-    std::mt19937 gen{std::random_device{}()};                          ///< Mersenne Twister engine seeded via hardware entropy.
-    std::normal_distribution<double> normal_dist{50.0, 5.0};           ///< Distribution for baseline normal data modeling (mean=50, stddev=5).
-    std::bernoulli_distribution anomaly_trigger{0.05};                 ///< Distribution determining anomaly injection frequency (5% probability).
-    std::uniform_real_distribution<double> anomaly_dist{100.0, 150.0}; ///< Distribution scaling anomaly outlier intensity bounds.
-    std::uniform_int_distribution<int> respondent_dist{1, 100};       ///< Distribution allocating target mock tenant boundaries.
+    std::mt19937 gen{std::random_device{}()}; ///< Standard pseudo-random engine seeded by the OS system clock/hardware.
+    
+	std::normal_distribution<double> normal_dist{50.0, 5.0}; ///< Generates baseline 'healthy' metrics centered around 50.0 (with a typical variance of +/- 5.0).
+    
+	std::bernoulli_distribution anomaly_trigger{0.05}; ///< Acts as a biased coin flip to trigger an spike/outlier exactly 5% of the time.
+    
+	std::uniform_real_distribution<double> anomaly_dist{100.0, 150.0}; ///< Generates a random massive values between 100.0 and 150.0 to fake an anomaly.
+    
+	std::uniform_int_distribution<int> respondent_dist{1, 100}; ///< Randomly selects a user ID between 1 and 100 to simulate multi-tenant traffic.
 
 public:
     /**

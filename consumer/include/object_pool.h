@@ -21,7 +21,7 @@
  * @brief Memory frame representing parsed telemetry transaction data.
  */
 struct DataPoint {
-    std::string respondent_id; ///< Target tenant/respondent identifier.
+    std::string respondent_id; ///< Target respondent identifier.
     double metric_value{0.0};  ///< Numerical metric point.
     long long timestamp{0};    ///< Epoch record time in seconds.
 };
@@ -48,7 +48,6 @@ public:
      */
     ~ObjectPool();
 
-    // Enforce linear ownership: inhibit copy behaviors
     ObjectPool(const ObjectPool&) = delete;
     ObjectPool& operator=(const ObjectPool&) = delete;
 

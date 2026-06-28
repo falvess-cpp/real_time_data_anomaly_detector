@@ -29,12 +29,12 @@ std::unique_ptr<Dispatcher> g_dispatcher;
  * @return int 0 on graceful execution hooks, 1 on unhandled connection or system failures.
  */
 int main() {
-    // Extract network binding targets from environment contexts
+
     const char* env_host = std::getenv("REDIS_HOST");
     const char* env_port = std::getenv("REDIS_PORT");
     
     std::string host = env_host ? env_host : "127.0.0.1";
-    std::string port = env_port ? env_port : "6380"; // Port 6380 targeted to route past local port conflicts
+    std::string port = env_port ? env_port : "6380";
 
     std::cout << "[CONSUMER] Initializing Real-Time Data Anomaly Detector Framework...\n";
 
@@ -46,7 +46,7 @@ int main() {
     if (concurrent_lanes == 0) concurrent_lanes = 4;
 
     // Spawn the routing tier with N=50 window sizes allocated per respondent tracking instance
-    g_dispatcher = std::make_unique<Dispatcher>(*g_object_pool, concurrent_lanes, 50, 100);
+    g_dispatcher = std::make_unique<Dispatcher>(*g_object_pool, concurrent_lanes, 50);
 
     try 
 	{
@@ -56,18 +56,14 @@ int main() {
         // Assign asynchronous transaction handler callbacks to incoming Pub/Sub streaming strings
         subscriber.on_message([](std::string /*channel*/, std::string message_frame) {
 		try {
-                // Parse message payload
                 auto parsed_payload = json::parse(message_frame);
 
-                // Acquire memory slice tracking framework from the ObjectPool
                 DataPoint* memory_slice = g_object_pool->acquire();
 
-                // Populate context properties using non-allocating types
                 memory_slice->respondent_id = parsed_payload["respondent_id"].get<std::string>();
                 memory_slice->metric_value = parsed_payload["metric_value"].get<double>();
                 memory_slice->timestamp = parsed_payload["timestamp"].get<long long>();
 
-                // Shift ownership downstream into parallel analytical workers
                 g_dispatcher->route(memory_slice);
 
             } catch (const std::exception& error) {
@@ -75,12 +71,11 @@ int main() {
             }
         });
 
-        // Open structural bindings onto channels and enter loop tracking executions
-        subscriber.subscribe("cint_events");
-        std::cout << "[CONSUMER] Stream connection established. Listening to 'cint_events' channel...\n";
+        subscriber.subscribe("metrics_stream");
+        std::cout << "[CONSUMER] Stream connection established. Listening to 'metrics_stream' channel...\n";
 
         while (true) {
-            subscriber.consume(); // Blocking I/O socket pooling execution block waiting on incoming network signals
+            subscriber.consume();
         }
 
     } catch (const sw::redis::Error& error) {

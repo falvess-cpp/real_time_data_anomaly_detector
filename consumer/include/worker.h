@@ -35,9 +35,9 @@ private:
 public:
     /**
      * @brief Constructs a rolling window analyzer.
-     * @param size Boundaries defining sliding limits.
+     * @param window_size Boundaries defining sliding limits.
      */
-    explicit RollingWindow(size_t min_size = 50, size_t max_size = 100);
+    explicit RollingWindow(size_t window_size = 50);
 
     /**
      * @brief Shifts data limits, updates variance records, and evaluates Z-score indicators.
@@ -54,16 +54,16 @@ public:
  */
 class Worker {
 private:
-    ObjectPool& memory_pool;                ///< Injected object pool.
-    size_t min_window_size{50};             ///< Min limit window parameter passed down into internal RollingWindow.
-	size_t max_window_size{100};            ///< Max limit window parameter passed down into internal RollingWindow.
-    std::queue<DataPoint*> task_queue;      ///< Thread local queue backing tasks mapped to this execution target.
-    std::mutex queue_mutex;                  ///< Serialization control guarding enqueue/dequeue blocks.
-    std::condition_variable_any cv;          ///< Notification coordinator driving thread sleep states.
-	std::jthread thread_handle;             ///< Managed thread handle context providing stop-token automation.
+    ObjectPool& memory_pool; ///< Injected object pool.
+    size_t min_window_size{50}; ///< Min limit window parameter passed down into internal RollingWindow.
+	size_t max_window_size{100}; ///< Max limit window parameter passed down into internal RollingWindow.
     
-    // Isolated thread-local - Zero lock contention for looking up windows
-    std::unordered_map<std::string, RollingWindow> local_windows;
+	std::queue<DataPoint*> task_queue; ///< Tasks mapped to this worker execution target.
+    std::mutex queue_mutex; ///< Control guarding enqueue/dequeue blocks.
+    std::condition_variable_any cv; ///< Notification coordinator driving thread sleep states.
+	std::jthread thread_handle; ///< Managed thread handle context providing stop-token automation.
+    
+    std::unordered_map<std::string, RollingWindow> local_windows; ///< Maps literal respondent IDs to their isolated sliding metric windows.
 
     /**
      * @brief Execution loop processing incoming items off queue contexts.
@@ -81,10 +81,9 @@ public:
     /**
      * @brief Prepares execution frameworks and boots active thread handlers.
      * @param pool Reference context directing structural recycle frameworks.
-     * @param min_window_size Min onfiguration limit driving sliding data windows.
-	 * @param max_window_size Max Configuration limit driving sliding data windows.
+     * @param window_size Configuration limit driving sliding data windows.
      */
-    Worker(ObjectPool& pool, size_t min_window_size, size_t max_window_size);
+    Worker(ObjectPool& pool, size_t window_size);
     
     ~Worker() = default;
 

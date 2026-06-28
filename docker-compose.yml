@@ -21,7 +21,7 @@ services:
       dockerfile: Dockerfile
       args:
         - REPO_URL=https://github.com/falvess-cpp/real_time_data_anomaly_detector.git
-        - REPO_VERSION=main
+        - REPO_VERSION=master
     container_name: c_realtime_producer
     restart: on-failure
     environment:
@@ -38,7 +38,7 @@ services:
       dockerfile: Dockerfile
       args:
         - REPO_URL=https://github.com/falvess-cpp/real_time_data_anomaly_detector.git
-        - REPO_VERSION=main
+        - REPO_VERSION=master
     container_name: c_realtime_consumer
     restart: on-failure
     environment:

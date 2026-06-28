@@ -53,21 +53,20 @@ The system is split into two specialized components coordinating over a lightwei
 
 Core Engineering Design Choices:
 
-* Bounded Zero-Allocation Memory Layer (ObjectPool): 
+* RollingWindow: 
+Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) before updating the window. This protects against floating-point drift and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
+
+* ObjectPool: 
 Eliminates constant calls to the global OS heap allocator (new/delete) during continuous streaming. Objects are pre-allocated at boot and recycled. To handle high-traffic bursts without introducing latency jitter, the pool features a deterministic capacity cap, safely deallocating transient surplus objects outside critical execution paths.
 
-* Thread-Confined State Routing (Dispatcher): 
+* Dispatcher: 
 Computes a deterministic modular hash on the incoming respondent_id (Sticky Routing). This forces all metrics belonging to a specific tenant into the exact same background worker queue, ensuring absolute chronological processing and allowing the worker's internal registries to run 100% lock-free.
-
-* Un-poisoned Baseline (RollingWindow): 
-Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) before updating the window. This protects against floating-point drift and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 * **For Containerized Execution:** Docker and Docker Compose installed.
 * **For Local Native Compilation:** CMake (>= 3.15), a C++20 compliant compiler (GCC >= 10 or Clang >= 11), and local development libraries for `redis++` and `nlohmann/json`.
-
 ---
 
 ### Method 1: Running with Docker Compose (Recommended)
@@ -83,6 +82,8 @@ docker-compose up -d
 # 3. Stream the Consumer logs to monitor real-time anomaly flagging
 docker logs -f c_realtime_consumer
 ```
+---
+
 ### Method 2: Building and Running Locally (Native Compilation)
 If you prefer to compile and execute the binaries directly on your host machine (outside Docker), follow these steps.
 
@@ -117,6 +118,7 @@ docker exec -it c_redis_messaging redis-cli -p 6380 MONITOR
 # If running against a local host Redis server:
 redis-cli -p 6380 MONITOR
 ```
+---
 
 ### Expected Output Log Output
 When monitoring the consumer logs, you will observe the pipeline actively partitioning multi-tenant workloads across separate internal OS threads:
@@ -125,59 +127,43 @@ When monitoring the consumer logs, you will observe the pipeline actively partit
 [Thread: 127236164376256][1782687150] Data point: 55.10 | Status: OK | Z-score: 0.21 | [ID: resp_63]
 [Thread: 127236223125184][1782687150] Data point: 115.31 | Status: ANOMALY DETECTED! | Z-score: 4.70 | ALERT: Significant deviation detected. [ID: resp_61]
 [Thread: 127236164376256][1782687152] Data point: 52.91 | Status: OK | Z-score: 0.18 | [ID: resp_90]
+---
 
 ## 🔮 Up Next
 
 ### 1. Code Maintenance & Tooling Ecosystem
 
-To evolve this project into an enterprise-grade repository maintained by a distributed engineering team, the following tooling additions are highly recommended:
+To evolve this project into an enterprise-grade repository maintained by distributed engineering teams, the following tooling stack is recommended for integration:
 
-Testing Framework: 
-Integration of GoogleTest (GTest) for deterministic unit testing of the stateful RollingWindow math, alongside GoogleMock to isolate components by mocking the network behavior of the sw::redis client.
+* **Testing Frameworks & E2E Regression:** Integration of **GoogleTest (GTest)** for deterministic unit testing of the stateful `RollingWindow` math, alongside **GoogleMock** to isolate network behaviors. Furthermore, GTest can orchestrate full **Integration Testing** pipelines by spinning up a *Fake Producer*. This component injects a pre-defined, deterministic historical dataset into the Redis stream, allowing the system to capture the Consumer's live outputs (Z-scores and anomaly logs) and validate them against a strict testing baseline ("golden master") to prevent mathematical or logical regressions across builds.
 
-Static Analysis & Linters: 
-Setup of clang-format to enforce an automated, unified coding standard across CI pipelines, and clang-tidy as a compiler frontend linter to catch modernization opportunities, unintended conversions, or potential memory management pitfalls.
+* **Static Analysis & Linters:** Setup of **`clang-format`** to enforce an automated, unified coding standard (e.g., LLVM or Google style) via pre-commit hooks, and **`clang-tidy`** as a compiler frontend linter to catch modernization opportunities, unintended type conversions, or potential concurrency pitfalls.
 
-Package Management: 
-Migrate raw manual tracking of third-party libraries (like nlohmann/json and redis++) to vcpkg or Conan, integrating them directly into the CMakeLists.txt toolchain specification for predictable cross-platform compilation.
+* **Modern Package Management:** Migrate manual dependency tracking of third-party libraries (like `nlohmann/json` and `redis++`) to a modern C++ package manager such as **vcpkg** or **Conan**, integrating them directly into the `CMakeLists.txt` toolchain specification for predictable cross-platform compilation.
 
-CI/CD Automation: 
-A GitHub Actions workflow executing multi-stage Docker builds, triggering static analysis checks, and running the test suite on every pull request before target branch merges.
+* **CI/CD Pipeline Automation:** A continuous integration workflow (e.g., **GitHub Actions**) configured to run automatically on every Pull Request (PR) or code push. This pipeline enforces mandatory quality gates by executing multi-stage Docker builds, running static analysis linters, and triggering the entire GoogleTest regression suite (including the *Fake Producer* E2E tests).
+---
 
 ### 2. Orchestration & Kubernetes Deployment
 
-This pipeline is fully architected to be cloud-native, making it completely eligible for deployment onto orchestration platforms like Kubernetes (EKS, GKE, or native clusters). To bridge the current setup to K8s production environments, the following elements must be implemented:
+This cloud-native pipeline is fully architected to be deployed and scaled horizontally within an orchestration platform like Kubernetes. From a System Design perspective, scaling this service distributedly requires transitioning the messaging layer from standard *Redis Pub/Sub* (which broadcasts events) to a partitioned log system like **Redis Streams (with Consumer Groups)** or **Apache Kafka**. This architectural shift ensures that metric workloads are consistently partitioned across multiple cluster pods by hashing the `respondent_id`, scaling throughput horizontally while perfectly preserving our lock-free, thread-confined local state design.
+---
 
-Deployment Manifests / Helm Charts: 
-Creation of standard Helm charts defining Deployment objects for the Consumer and Producer services, alongside a managed Redis instance (or a stateful container orchestration pattern using an operator like Redis-Operator).
+### 3. Critical Missing Technical Requirements & Architectural Thoughts
+While highly optimized for performance, a production-grade enterprise deployment would require addressing the following real-world architectural constraints:
 
-Workload Scaling Model Change (Crucial Nuance): 
-The current system uses standard Redis Pub/Sub, which operates on a broadcast pattern (fan-out). If you scale the Consumer to multiple Kubernetes pods under this model, every pod will receive every message, breaking our thread-confined data architecture and multiplying CPU usage redundantly. To scale horizontally in K8s, the messaging backend must transition to Redis Streams (with Consumer Groups) or Apache Kafka. This guarantees that workloads are partitioned so that each pod owns a distinct, mutually exclusive subset of respondent_ids.
-
-Health & Lifecycle Probes: 
-Implement an embedded HTTP server (using an ultra-lightweight library like crow or a basic socket listener) inside main.cpp exposing /healthz (Liveness) and /readyz (Readiness) endpoints. This allows Kubernetes to continuously monitor if the internal Redis subscription connection has stalled or dropped, triggering automated self-healing container recycles.
-
-Observability Ingestion: 
-Instrument the Hot Path using a telemetry library like prometheus-cpp to expose core performance counters (messages processed/sec, object pool utilization rate, active memory window sizes, and anomaly counts). These metrics would be scraped by a Prometheus Operator and rendered on Grafana dashboard towers.
-
-### 3. Missing Technical Requirements & Architectural Thoughts
-While highly optimized for performance, a production-grade deployment would require addressing the following real-world constraints:
-
-State Durability & Persistence: 
-* The Problem: The sliding baseline states (local_windows) currently reside entirely inside volatile worker RAM. If a Consumer pod crashes or restarts due to an infrastructure event, the historical baseline for all tenants is wiped out. New metrics will be blind until the windows collect enough entries (min_size = 50) to compute Z-scores again.
-
-The Mitigation: 
-Implement a periodic state-snapshotting worker. This background routine would serialize the historical metrics deques into high-speed persistent keys (such as Redis Hashes or a TimeSeries backend) allowing pods to rebuild their local state instantly upon container boot.
-
-Dynamic Configuration Hot-Reloading:
-The Problem: Hyper-parameters like the Z-score threshold (3.0), minimum window sizes (50), and the Redis target endpoints are bound at compilation or boot time.
-The Mitigation: Integrate a dynamic configuration listener thread. By subscribing to a dedicated Redis configuration channel (config_stream), operators can publish runtime tuning payloads (e.g., changing a sensitive threshold to 3.5 on the fly during a massive traffic event) without triggering a service redeployment.
-
-Graceful Signal Handling:
-
-The Problem: Terminating the container via standard docker kill interrupts can leave un-acked or half-processed payloads stranded in the worker's thread queues.
-
-The Mitigation: Bind custom UNIX signal handlers (SIGINT/SIGTERM) in main.cpp. Upon interception, the application should cleanly halt the Redis subscription consumption loop, allow active background threads to flush their pending queue workloads back to the ObjectPool, log final pipeline statistics, and exit with a clean 0 code.
+* **State Durability & Persistence:**
+  * *The Problem:* The sliding baseline states currently reside entirely inside volatile worker RAM. If a Consumer container or node crashes due to an infrastructure event, the historical baseline for all tenants is wiped out. New metrics will be blind until the windows collect enough entries to compute statistics again, creating an operational visibility gap.
+  * *The Solution:* Implement the **Event Sourcing & Embedded Durable State Store pattern**. By backing the local sliding windows with a high-performance, low-latency embedded key-value store (such as RocksDB), states are continuously and deterministically flushed to non-volatile storage with sub-millisecond overhead. Coupled with a durable commit-log messaging layer, a recovering or newly spawned container can instantly rebuild its local state up to the exact last committed checkpoint offset, guaranteeing a **Zero-Data-Loss Recovery Time Objective (RTO)**.
+---  
+* **Dynamic Configuration Hot-Reloading:**
+  * *The Problem:* Operational hyper-parameters—such as statistical anomaly thresholds, minimum window sizes, and network topology bounds—are fixed at boot time. Tuning these parameters to adapt to changing real-world signal noise or operational shifts requires a full service restart, leading to pipeline downtime and state teardown.
+  * *The Solution:* Implement a **Lock-Free Configuration Hot-Swapping Pattern**. By encapsulating runtime tuning parameters within thread-safe atomic primitives or reference pointer wrappers, the processing engine threads can evaluate thresholds with zero lock contention. A dedicated background configuration thread listens to a control channel, allowing operators to broadcast remote configuration updates that are swapped on-the-fly without causing ingestion stalls, pipeline locks, or service restarts.
+---  
+* **Graceful Signal Handling & Cooperative Pipeline Drain:**
+  * *The Problem:* Terminating the execution container via abrupt infrastructure or operating system interrupts kills the process immediately. This leaves half-processed or un-evaluated telemetry payloads stranded in background memory queues, drops active network sockets violently, and prevents the system from generating final pipeline diagnostics.
+  * *The Solution:* Implement the **Cooperative Pipeline Drain Pattern**. By intercepting termination signals from the operating system, the application breaks the main network ingestion loop and propagates a cooperative cancellation signal across all active execution lanes. Instead of aborting immediately, the engine enters a synchronized draining state: background threads are granted a grace window to finish processing all remaining events currently queued in their internal buffers and release resources cleanly before a safe, deterministic application teardown.
+---
 
 ## 🛠️ Project Structure
 

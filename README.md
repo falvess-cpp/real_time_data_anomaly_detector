@@ -9,13 +9,54 @@ The system is split into two specialized components coordinating over a lightwei
 1. **Producer Service (Data Generator):** Simulates concurrent multi-tenant transaction workloads. It models standard respondent behavior using a normal distribution ($\mu = 50.0, \sigma = 5.0$) while intentionally injecting controlled 5% Bernoulli outliers ($[100.0, 150.0]$) representing anomalous behavior.
 2. **Consumer Service (Anomaly Detector):** A highly parallelized multi-threaded engine optimized for zero-allocation performance on the hot path.
 
-### Core Engineering Design Choices:
+### Pipeline Architecture Map (Many-to-One Topology)
 
-* **Bounded Zero-Allocation Memory Layer (`ObjectPool`):** Eliminates constant calls to the global OS heap allocator (`new`/`delete`) during continuous streaming. Objects are pre-allocated at boot and recycled. To handle high-traffic bursts without introducing latency jitter, the pool features a deterministic capacity cap, safely deallocating transient surplus objects outside critical execution paths.
+```text
+  +-----------------+             +-----------------+
+  |   Producer 1    |             |   Producer N    |  <- Multiple instances generating
+  | (Normal/Bernou) |             | (Normal/Bernou) |     asynchronous metrics data
+  +-----------------+             +-----------------+
+           |                               |
+           +---------------+---------------+
+                           |  Publishes JSON Payloads
+                           v
+              +-------------------------+
+              |   Redis Pub/Sub Broker  |  <- Centralized message broker
+              |    ("metrics_stream")   |     (Topology: Many-to-One)
+              +-------------------------+
+                           |
+                           v  subscriber.consume() (Single-Thread Path)
+              +-------------------------+
+              |  Consumer: Main Thread  |  <- Parses JSON and acquires raw
+              |  (JSON Parse & Acquire) |     pointers from the ObjectPool
+              +-------------------------+
+                           |
+                           v  g_dispatcher->route(point)
+              +-------------------------+
+              |  Dispatcher (Routing)   |  <- Computes Hash(respondent_id) % PoolSize
+              +-------------------------+
+                 /          |          \
+                /           |           \   Sticky Routing (Guarantees chronological order)
+               v            v            v
+        +------------+ +------------+ +------------+
+        |  Worker 1  | |  Worker 2  | |  Worker N  |  <- Active OS Thread Pool
+        | (Queue t1) | | (Queue t2) | | (Queue tN) |     (jthread + condition_variable)
+        +------------+ +------------+ +------------+
+              |              |              |
+              v              v              v
+        +------------+ +------------+ +------------+
+        | Local Map  | | Local Map  | | Local Map  |  <- Thread-Confined State Store
+        |  Rolling   | |  Rolling   | |  Rolling   |     (Isolated memory windows per tenant,
+        |  Windows   | |  Windows   | |  Windows   |      running 100% LOCK-FREE)
+        +------------+ +------------+ +------------+
 
-* **Thread-Confined State Routing (`Dispatcher`):** Computes a deterministic modular hash on the incoming `respondent_id` (Sticky Routing). This forces all metrics belonging to a specific tenant into the exact same background worker queue, ensuring absolute chronological processing and allowing the worker's internal registries to run **100% lock-free**.
-
-* **Un-poisoned Baseline (`RollingWindow`):** Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) *before* updating the window. This protects against *floating-point drift* and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
+Core Engineering Design Choices:
+* Bounded Zero-Allocation Memory Layer (ObjectPool): 
+	Eliminates constant calls to the global OS heap allocator (new/delete) during continuous streaming. Objects are pre-allocated at boot and recycled. To handle high-traffic bursts without introducing latency jitter, the pool features a deterministic capacity cap, safely deallocating transient surplus objects outside critical execution paths.
+* Thread-Confined State Routing (Dispatcher): 
+	Computes a deterministic modular hash on the incoming respondent_id (Sticky Routing). This forces all metrics belonging to a specific tenant into the exact same background worker queue, ensuring absolute chronological processing and allowing the worker's internal registries to run 100% lock-free.
+* Un-poisoned Baseline (RollingWindow): 
+	Evaluates incoming signals against the sliding historical queue ($N = 50$ to $100$) before updating the window. This protects against floating-point drift and prevents large consecutive anomalies from inflating the standard deviation, preserving the sensitivity of the Z-score transformation.
 
 ---
 

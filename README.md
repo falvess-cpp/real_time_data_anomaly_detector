@@ -146,6 +146,7 @@ To evolve this project into an enterprise-grade repository maintained by distrib
 ---
 
 ### 2. Orchestration & Kubernetes Deployment
+
 This cloud-native pipeline is fully architected to be deployed and scaled horizontally within an orchestration platform like Kubernetes. From a System Design perspective, scaling this service distributedly requires transitioning the messaging layer from standard Redis Pub/Sub (which broadcasts events) to a partitioned log system like Redis Streams (with Consumer Groups) or Apache Kafka. This architectural shift ensures that metric workloads are consistently partitioned across multiple cluster pods by hashing the respondent_id, scaling throughput horizontally while perfectly preserving our lock-free, thread-confined local state design.
 ---
 

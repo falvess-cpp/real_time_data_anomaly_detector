@@ -88,9 +88,9 @@ When monitoring the consumer logs, you will observe the pipeline actively partit
 [Thread: 14023948293] [1719597101] Data point: 52.10 | Status: NORMAL   | Z-score: 0.42 | [ID: resp_12]
 [Thread: 14023948500] [1719597102] Data point: 142.50 | Status: ANOMALY DETECTED! | Z-score: 18.40 | ALERT: Significant deviation detected. [ID: resp_45]
 
-##🔮 Up Next & Production Roadmaps
+## 🔮 Up Next & Production Roadmaps
 
-1. Code Maintenance & Tooling Ecosystem
+### 1. Code Maintenance & Tooling Ecosystem
 
 To evolve this project into an enterprise-grade repository maintained by a distributed engineering team, the following tooling additions are highly recommended:
 
@@ -106,7 +106,7 @@ Migrate raw manual tracking of third-party libraries (like nlohmann/json and red
 CI/CD Automation: 
 A GitHub Actions workflow executing multi-stage Docker builds, triggering static analysis checks, and running the test suite on every pull request before target branch merges.
 
-2. Orchestration & Kubernetes Deployment
+### 2. Orchestration & Kubernetes Deployment
 
 This pipeline is fully architected to be cloud-native, making it completely eligible for deployment onto orchestration platforms like Kubernetes (EKS, GKE, or native clusters). To bridge the current setup to K8s production environments, the following elements must be implemented:
 
@@ -122,7 +122,7 @@ Implement an embedded HTTP server (using an ultra-lightweight library like crow 
 Observability Ingestion: 
 Instrument the Hot Path using a telemetry library like prometheus-cpp to expose core performance counters (messages processed/sec, object pool utilization rate, active memory window sizes, and anomaly counts). These metrics would be scraped by a Prometheus Operator and rendered on Grafana dashboard towers.
 
-3. Missing Technical Requirements & Architectural Thoughts
+### 3. Missing Technical Requirements & Architectural Thoughts
 While highly optimized for performance, a production-grade deployment would require addressing the following real-world constraints:
 
 State Durability & Persistence: 

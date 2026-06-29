@@ -138,20 +138,20 @@ To evolve this project into an enterprise-grade repository maintained by distrib
 
 * **Testing Frameworks & E2E Regression:** Integration of **GoogleTest (GTest)** for deterministic unit testing of the stateful `RollingWindow` math, alongside **GoogleMock** to isolate network behaviors. Furthermore, GTest can orchestrate full **Integration Testing** pipelines by spinning up a *Fake Producer*. This component injects a pre-defined, deterministic historical dataset into the Redis stream, allowing the system to capture the Consumer's live outputs (Z-scores and anomaly logs) and validate them against a strict testing baseline ("golden master") to prevent mathematical or logical regressions across builds.
 
-* **Static Analysis & Linters:** Setup of **`clang-format`** to enforce an automated, unified coding standard (e.g., LLVM or Google style) via pre-commit hooks, and **`clang-tidy`** as a compiler frontend linter to catch modernization opportunities, unintended type conversions, or potential concurrency pitfalls.
+* **Static Analysis:** Implementation of automated code formatting tools to enforce a unified, project-wide style guide via pre-commit hooks, coupled with advanced static code analysis utilities. These linters continuously inspect source code before compilation or code review to automatically intercept anti-patterns, potential type-safety violations, architectural deviations, or structural concurrency pitfalls.
 
-* **Modern Package Management:** Migrate manual dependency tracking of third-party libraries (like `nlohmann/json` and `redis++`) to a modern C++ package manager such as **vcpkg** or **Conan**, integrating them directly into the `CMakeLists.txt` toolchain specification for predictable cross-platform compilation.
+* **Package Management:** Migrate manual or vendor-based tracking of third-party libraries to a modern, declarative package management ecosystem integrated directly into the primary build configuration system. This formalizes dependency resolution, locks exact upstream artifact versions cleanly, and guarantees predictable, reproducible cross-platform compilation profiles across all development, staging, and production environments.
 
 * **CI/CD Pipeline Automation:** A continuous integration workflow (e.g., **GitHub Actions**) configured to run automatically on every Pull Request (PR) or code push. This pipeline enforces mandatory quality gates by executing multi-stage Docker builds, running static analysis linters, and triggering the entire GoogleTest regression suite (including the *Fake Producer* E2E tests).
 ---
 
-### 2. Orchestration & Kubernetes Deployment
+### 2. Orchestration
 This cloud-native pipeline is fully architected to be deployed and scaled horizontally within an orchestration platform like Kubernetes.
 
 * **System Design Scaling Model: Scaling this service distributedly requires transitioning the messaging layer from standard Redis Pub/Sub (which broadcasts events) to a partitioned log system like Redis Streams (with Consumer Groups) or Apache Kafka. This architectural shift ensures that metric workloads are consistently partitioned across multiple cluster pods by hashing the respondent_id, scaling throughput horizontally while perfectly preserving our lock-free, thread-confined local state design.**
 ---
 
-### 3. Critical Missing Technical Requirements & Architectural Thoughts
+### 3. Architectural Thoughts
 While highly optimized for performance, a production-grade enterprise deployment would require addressing the following real-world architectural constraints:
 
 * **Persistent Audit Datastore Layer:**
